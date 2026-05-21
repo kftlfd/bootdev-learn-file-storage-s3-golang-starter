@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,6 +57,15 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 
 	mediaType := header.Header.Get("Content-Type")
+	mt, _, err := mime.ParseMediaType(mediaType)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unknown file mime type: "+mediaType, err)
+		return
+	}
+	if mt != "image/jpeg" && mt != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Bad file mime type: "+mediaType, nil)
+		return
+	}
 
 	imageData, err := io.ReadAll(file)
 	if err != nil {
