@@ -15,6 +15,9 @@ import (
 )
 
 func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
+	const uploadLimit = 1 << 30 // 1 GB
+	r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
+
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -46,8 +49,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	fmt.Println("uploading video file for video", videoID, "by user", userID)
-
-	http.MaxBytesReader(w, r.Body, 1<<30) // 1 GB
 
 	videoFile, header, err := r.FormFile("video")
 	if err != nil {
