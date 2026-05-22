@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -87,13 +85,11 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	randName := make([]byte, 32)
-	rand.Read(randName)
-	fileName := base64.RawURLEncoding.EncodeToString(randName) + ".amazonaws.com" + ".mp4"
+	key := createRandomAssetKey(mt, "amazonaws.com")
 
 	_, err = cfg.s3.Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3.Bucket,
-		Key:         &fileName,
+		Key:         &key,
 		Body:        file,
 		ContentType: &mt,
 	})
@@ -102,7 +98,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	videoURL := fmt.Sprintf("%s/%s/%s", cfg.s3.Url, cfg.s3.Bucket, fileName)
+	videoURL := cfg.getS3ObjectUrl(key)
+
 	video.VideoURL = &videoURL
 	if err = cfg.db.UpdateVideo(video); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error updating video", err)
