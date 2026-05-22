@@ -1,7 +1,112 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"io"
+	"mime"
 	"net/http"
+	"os"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
+	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {}
+func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
+	videoIDString := r.PathValue("videoID")
+	videoID, err := uuid.Parse(videoIDString)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid ID", err)
+		return
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
+		return
+	}
+
+	video, err := cfg.db.GetVideo(videoID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Video not found", err)
+		return
+	}
+
+	if video.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "Not video owner", nil)
+		return
+	}
+
+	fmt.Println("uploading video file for video", videoID, "by user", userID)
+
+	http.MaxBytesReader(w, r.Body, 1<<30) // 1 GB
+
+	videoFile, header, err := r.FormFile("video")
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
+		return
+	}
+	defer videoFile.Close()
+
+	mt, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unknown file mime type: "+mt, err)
+		return
+	}
+	if mt != "video/mp4" {
+		respondWithError(w, http.StatusBadRequest, "Bad file mime type: "+mt, nil)
+		return
+	}
+
+	file, err := os.CreateTemp("", "tubely-upload-*.mp4")
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating temp file", err)
+		return
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+
+	_, err = io.Copy(file, videoFile)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error writing to temp file", err)
+		return
+	}
+
+	_, err = file.Seek(0, io.SeekStart)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error temp file seek", err)
+		return
+	}
+
+	randName := make([]byte, 32)
+	rand.Read(randName)
+	fileName := base64.RawURLEncoding.EncodeToString(randName) + ".mp4"
+
+	_, err = cfg.s3.Client.PutObject(r.Context(), &s3.PutObjectInput{
+		Bucket:      &cfg.s3.Bucket,
+		Key:         &fileName,
+		Body:        file,
+		ContentType: &mt,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error s3 put", err)
+		return
+	}
+
+	videoURL := fmt.Sprintf("%s/%s/%s", cfg.s3.Url, cfg.s3.Bucket, fileName)
+	video.VideoURL = &videoURL
+	if err = cfg.db.UpdateVideo(video); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error updating video", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, video)
+}
