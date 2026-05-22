@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -42,6 +43,14 @@ func (cfg apiConfig) ensureAssetsDir() error {
 		return os.Mkdir(cfg.assetsRoot, 0755)
 	}
 	return nil
+}
+
+func (cfg apiConfig) getAssetDiskPath(assetPath string) string {
+	return filepath.Join(cfg.assetsRoot, assetPath)
+}
+
+func (cfg apiConfig) getDiskObkectUrl(key string) string {
+	return fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, key)
 }
 
 func (cfg apiConfig) getS3ObjectUrl(key string) string {
