@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -55,4 +59,50 @@ func (cfg apiConfig) getDiskObkectUrl(key string) string {
 
 func (cfg apiConfig) getS3ObjectUrl(key string) string {
 	return fmt.Sprintf("%s/%s/%s", cfg.s3.Url, cfg.s3.Bucket, key)
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
+
+	buf := bytes.NewBuffer([]byte{})
+	cmd.Stdout = buf
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("Error running ffprobe: %w", err)
+	}
+
+	res := struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	}{}
+	if err := json.NewDecoder(buf).Decode(&res); err != nil {
+		return "", fmt.Errorf("Error decoding ffprobe result: %w", err)
+	}
+
+	ratio := "other"
+
+	const tolerance = 0.01
+	r := float64(res.Width) / float64(res.Height)
+	if math.Abs(r-(16.0/9.0)) <= tolerance {
+		ratio = "16:9"
+	} else if math.Abs(r-(9.0/16.0)) <= tolerance {
+		ratio = "9:16"
+	}
+
+	return ratio, nil
+}
+
+func getS3ObjVideoPrefix(filePath string) (string, error) {
+	ratio, err := getVideoAspectRatio(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	if ratio == "16:9" {
+		return "landscape", nil
+	}
+	if ratio == "9:16" {
+		return "portrait", nil
+	}
+	return "other", nil
 }

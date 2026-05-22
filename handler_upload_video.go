@@ -85,7 +85,13 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	key := createRandomAssetKey(mt, "amazonaws.com")
+	prefix, err := getS3ObjVideoPrefix(file.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting video prefix", err)
+		return
+	}
+
+	key := prefix + "/" + createRandomAssetKey(mt, "amazonaws.com")
 
 	_, err = cfg.s3.Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3.Bucket,
