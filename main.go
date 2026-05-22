@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/awsS3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 
 	"github.com/joho/godotenv"
@@ -12,21 +13,19 @@ import (
 )
 
 type apiConfig struct {
-	db               database.Client
-	jwtSecret        string
-	platform         string
-	filepathRoot     string
-	assetsRoot       string
-	s3Bucket         string
-	s3Region         string
-	s3CfDistribution string
-	port             string
+	db           database.Client
+	s3           awsS3.S3Service
+	jwtSecret    string
+	platform     string
+	filepathRoot string
+	assetsRoot   string
+	port         string
 }
 
-type thumbnail struct {
-	data      []byte
-	mediaType string
-}
+// type thumbnail struct {
+// 	data      []byte
+// 	mediaType string
+// }
 
 // var videoThumbnails = map[uuid.UUID]thumbnail{}
 
@@ -63,36 +62,24 @@ func main() {
 		log.Fatal("ASSETS_ROOT environment variable is not set")
 	}
 
-	s3Bucket := os.Getenv("S3_BUCKET")
-	if s3Bucket == "" {
-		log.Fatal("S3_BUCKET environment variable is not set")
-	}
-
-	s3Region := os.Getenv("S3_REGION")
-	if s3Region == "" {
-		log.Fatal("S3_REGION environment variable is not set")
-	}
-
-	s3CfDistribution := os.Getenv("S3_CF_DISTRO")
-	if s3CfDistribution == "" {
-		log.Fatal("S3_CF_DISTRO environment variable is not set")
-	}
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		log.Fatal("PORT environment variable is not set")
 	}
 
+	s3Service, err := awsS3.NewS3Service()
+	if err != nil {
+		log.Fatalf("Fail to setup S3 service: %v", err)
+	}
+
 	cfg := apiConfig{
-		db:               db,
-		jwtSecret:        jwtSecret,
-		platform:         platform,
-		filepathRoot:     filepathRoot,
-		assetsRoot:       assetsRoot,
-		s3Bucket:         s3Bucket,
-		s3Region:         s3Region,
-		s3CfDistribution: s3CfDistribution,
-		port:             port,
+		db:           db,
+		s3:           s3Service,
+		jwtSecret:    jwtSecret,
+		platform:     platform,
+		filepathRoot: filepathRoot,
+		assetsRoot:   assetsRoot,
+		port:         port,
 	}
 
 	err = cfg.ensureAssetsDir()
