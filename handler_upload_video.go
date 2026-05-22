@@ -88,7 +88,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	randName := make([]byte, 32)
 	rand.Read(randName)
-	fileName := base64.RawURLEncoding.EncodeToString(randName) + ".mp4"
+	fileName := base64.RawURLEncoding.EncodeToString(randName) + ".amazonaws.com" + ".mp4"
 
 	_, err = cfg.s3.Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3.Bucket,
