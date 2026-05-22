@@ -106,3 +106,15 @@ func getS3ObjVideoPrefix(filePath string) (string, error) {
 	}
 	return "other", nil
 }
+
+func processVideoForFastStart(filePath string) (string, error) {
+	outPath := filePath + ".processing"
+
+	cmd := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outPath)
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("Error running ffmpeg: %w", err)
+	}
+
+	return outPath, nil
+}

@@ -85,6 +85,20 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	processedFilePath, err := processVideoForFastStart(file.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error processing file", err)
+		return
+	}
+
+	processedFile, err := os.Open(processedFilePath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error opening processed file", err)
+		return
+	}
+	defer os.Remove(processedFile.Name())
+	defer processedFile.Close()
+
 	prefix, err := getS3ObjVideoPrefix(file.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error getting video prefix", err)
@@ -96,7 +110,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	_, err = cfg.s3.Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3.Bucket,
 		Key:         &key,
-		Body:        file,
+		Body:        processedFile,
 		ContentType: &mt,
 	})
 	if err != nil {
